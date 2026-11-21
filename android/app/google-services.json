@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "1041167636354",
+    "firebase_url": "https://monitoring-sppg-81246-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "monitoring-sppg-81246",
+    "storage_bucket": "monitoring-sppg-81246.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1041167636354:android:27762e08a34c32a0f9619b",
+        "android_client_info": {
+          "package_name": "id.sppg.monitoring"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCVZHK3DX4Ut25d_OsZyS8xhEXQuU3NiaI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

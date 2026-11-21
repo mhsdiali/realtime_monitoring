@@ -1,0 +1,150 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "monitoring": {
+      ".read": "auth != null",
+      "latest": {
+        ".write": "auth != null && auth.uid === 'VH3AIXTF47NIdjjdqNdRzMgGLQK2'",
+        ".validate": "newData.hasChildren(['temperature', 'humidity', 'timestamp'])",
+        "temperature": {
+          ".validate": "newData.isNumber() && newData.val() >= 10 && newData.val() <= 40"
+        },
+        "humidity": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100"
+        },
+        "timestamp": {
+          ".validate": "newData.isNumber()"
+        },
+        "$other": {
+          ".validate": false
+        }
+      },
+      "history": {
+        "$ts": {
+          ".write": "auth != null && auth.uid === 'VH3AIXTF47NIdjjdqNdRzMgGLQK2' && !data.exists()",
+          ".validate": "newData.hasChildren(['temperature', 'humidity', 'timestamp'])",
+          "temperature": {
+            ".validate": "newData.isNumber() && newData.val() >= 10 && newData.val() <= 40"
+          },
+          "humidity": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100"
+          },
+          "timestamp": {
+            ".validate": "newData.isNumber()"
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      }
+    },
+    "devices": {
+      "status": {
+        "last_seen": {
+          ".read": "auth != null",
+          ".write": "auth != null && auth.uid === 'VH3AIXTF47NIdjjdqNdRzMgGLQK2'",
+          ".validate": "newData.isNumber()"
+        },
+        "offline_notified": {
+          ".validate": false
+        }
+      },
+      "ac_control": {
+        "commands": {
+          ".read": "auth != null",
+          ".write": "auth != null && auth.uid !== 'VH3AIXTF47NIdjjdqNdRzMgGLQK2'",
+          "$commandId": {
+            ".validate": "newData.hasChildren(['action', 'created_at'])",
+            "action": {
+              ".validate": "newData.isString() && (newData.val() === 'turn_on' || newData.val() === 'turn_off' || newData.val() === 'set_temperature')"
+            },
+            "setpoint": {
+              ".validate": "newData.isNumber() && newData.val() >= 16 && newData.val() <= 30"
+            },
+            "created_at": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
+        "acknowledgements": {
+          ".read": "auth != null",
+          ".write": "auth != null && auth.uid === 'VH3AIXTF47NIdjjdqNdRzMgGLQK2'",
+          "$commandId": {
+            ".validate": "newData.hasChildren(['status'])",
+            "status": {
+              ".validate": "newData.isString() && newData.val() === 'transmitted'"
+            },
+            "processed_at": {
+              ".validate": "newData.isNumber()"
+            },
+            "error_message": {
+              ".validate": "newData.isString()"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        }
+      }
+    },
+    "thresholds": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      ".validate": "newData.hasChildren(['temperature', 'humidity'])",
+      "temperature": {
+        ".validate": "newData.hasChildren(['min', 'max'])",
+        "min": {
+          ".validate": "newData.isNumber() && newData.val() >= 10 && newData.val() <= 40"
+        },
+        "max": {
+          ".validate": "newData.isNumber() && newData.val() >= 10 && newData.val() <= 40"
+        },
+        "$other": {
+          ".validate": false
+        }
+      },
+      "humidity": {
+        ".validate": "newData.hasChildren(['min', 'max'])",
+        "min": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100"
+        },
+        "max": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100"
+        },
+        "$other": {
+          ".validate": false
+        }
+      },
+      "$other": {
+        ".validate": false
+      }
+    },
+    "alert_state": {
+      ".read": "auth != null",
+      ".write": false
+    },
+    "fcm_tokens": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        ".indexOn": ["token"],
+        "$tokenId": {
+          ".validate": "newData.hasChildren(['token', 'updated_at'])",
+          "token": {
+            ".validate": "newData.isString() && newData.val().length > 0"
+          },
+          "updated_at": {
+            ".validate": "newData.isNumber()"
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      }
+    }
+  }
+}
