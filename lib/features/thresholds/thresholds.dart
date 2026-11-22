@@ -17,4 +17,34 @@ class Thresholds {
   final double temperatureMax;
   final double humidityMin;
   final double humidityMax;
+
+  /// Membaca node `thresholds` dari RTDB. Null bila node belum lengkap.
+  static Thresholds? fromValue(Object? value) {
+    if (value is! Map) {
+      return null;
+    }
+    final temperature = value['temperature'];
+    final humidity = value['humidity'];
+    if (temperature is! Map || humidity is! Map) {
+      return null;
+    }
+
+    final temperatureMin = (temperature['min'] as num?)?.toDouble();
+    final temperatureMax = (temperature['max'] as num?)?.toDouble();
+    final humidityMin = (humidity['min'] as num?)?.toDouble();
+    final humidityMax = (humidity['max'] as num?)?.toDouble();
+    if (temperatureMin == null ||
+        temperatureMax == null ||
+        humidityMin == null ||
+        humidityMax == null) {
+      return null;
+    }
+
+    return Thresholds(
+      temperatureMin: temperatureMin,
+      temperatureMax: temperatureMax,
+      humidityMin: humidityMin,
+      humidityMax: humidityMax,
+    );
+  }
 }

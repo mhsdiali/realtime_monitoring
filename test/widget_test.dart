@@ -6,6 +6,7 @@ import 'package:app_monitoring/features/auth/auth_repository.dart';
 import 'package:app_monitoring/features/ac_control/ac_acknowledgement.dart';
 import 'package:app_monitoring/features/ac_control/ac_action.dart';
 import 'package:app_monitoring/features/ac_control/ac_control_repository.dart';
+import 'package:app_monitoring/features/dashboard/alert_state.dart';
 import 'package:app_monitoring/features/dashboard/latest_reading.dart';
 import 'package:app_monitoring/features/dashboard/monitoring_repository.dart';
 import 'package:app_monitoring/features/dashboard/monitoring_snapshot.dart';
@@ -131,6 +132,11 @@ void main() {
     expect(find.text('Data diperbarui otomatis.'), findsOneWidget);
     expect(find.text('24,5 °C'), findsOneWidget);
     expect(find.text('55,0%'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('01/01/1970 07:00:00 WIB'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('01/01/1970 07:00:00 WIB'), findsOneWidget);
   });
 
@@ -250,6 +256,75 @@ void main() {
 
     expect(find.text('01/01/1970 07:00:00 WIB'), findsOneWidget);
     expect(find.text('01/01/1970 07:01:00 WIB'), findsOneWidget);
+  });
+
+  testWidgets('grafik riwayat menampilkan batas normal', (tester) async {
+    final auth = FakeAuthRepository(true);
+    final monitoring = FakeMonitoringRepository();
+    final history = FakeHistoryRepository(
+      readings: const [
+        HistoryReading(temperature: 18, humidity: 50, timestampMillis: 0),
+        HistoryReading(temperature: 21, humidity: 62, timestampMillis: 60000),
+      ],
+    );
+    addTearDown(auth.dispose);
+    addTearDown(monitoring.dispose);
+
+    await tester.pumpWidget(
+      AppMonitoringApp(
+        authRepository: auth,
+        monitoringRepository: monitoring,
+        historyRepository: history,
+        thresholdRepository: FakeThresholdRepository(
+          initial: Thresholds.defaults,
+        ),
+        acControlRepository: FakeAcControlRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Riwayat'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Garis merah: batas normal 16–20 °C'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Garis merah: batas normal 40–60%'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('riwayat tetap tampil bila batas normal gagal dimuat', (
+    tester,
+  ) async {
+    final auth = FakeAuthRepository(true);
+    final monitoring = FakeMonitoringRepository();
+    final thresholds = FakeThresholdRepository()..shouldFailLoad = true;
+    addTearDown(auth.dispose);
+    addTearDown(monitoring.dispose);
+
+    await tester.pumpWidget(
+      AppMonitoringApp(
+        authRepository: auth,
+        monitoringRepository: monitoring,
+        historyRepository: FakeHistoryRepository(
+          readings: const [
+            HistoryReading(temperature: 18, humidity: 50, timestampMillis: 0),
+          ],
+        ),
+        thresholdRepository: thresholds,
+        acControlRepository: FakeAcControlRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Riwayat'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Suhu (°C)'), findsOneWidget);
+    expect(find.textContaining('Garis merah'), findsNothing);
   });
 
   testWidgets('menampilkan keadaan kosong riwayat', (tester) async {
@@ -729,9 +804,145 @@ void main() {
 
     await tester.tap(find.byTooltip('Keluar'));
     await tester.pumpAndSettle();
+    expect(find.text('Keluar dari aplikasi?'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Keluar'));
+    await tester.pumpAndSettle();
 
     expect(find.widgetWithText(FilledButton, 'Masuk'), findsOneWidget);
     expect(find.byType(TextFormField), findsNWidgets(2));
+  });
+
+  testWidgets('batal keluar tetap di beranda', (tester) async {
+    final auth = FakeAuthRepository(true);
+    final monitoring = FakeMonitoringRepository();
+    addTearDown(auth.dispose);
+    addTearDown(monitoring.dispose);
+
+    await tester.pumpWidget(
+      AppMonitoringApp(
+        authRepository: auth,
+        monitoringRepository: monitoring,
+        historyRepository: FakeHistoryRepository(),
+        thresholdRepository: FakeThresholdRepository(),
+        acControlRepository: FakeAcControlRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Keluar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, 'Batal'));
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(AppBar, 'Beranda'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Masuk'), findsNothing);
+  });
+
+  testWidgets('menampilkan kondisi abnormal dan parameter yang bermasalah', (
+    tester,
+  ) async {
+    final auth = FakeAuthRepository(true);
+    final monitoring = FakeMonitoringRepository(
+      const MonitoringSnapshot(
+        reading: LatestReading(
+          temperature: 23.4,
+          humidity: 55,
+          timestampMillis: 0,
+        ),
+        isOnline: true,
+        alert: AlertState(
+          status: AlertStatus.abnormal,
+          activeParameters: ['temperature'],
+          updatedAtMillis: 0,
+        ),
+        thresholds: Thresholds.defaults,
+      ),
+    );
+    addTearDown(auth.dispose);
+    addTearDown(monitoring.dispose);
+
+    await tester.pumpWidget(
+      AppMonitoringApp(
+        authRepository: auth,
+        monitoringRepository: monitoring,
+        historyRepository: FakeHistoryRepository(),
+        thresholdRepository: FakeThresholdRepository(),
+        acControlRepository: FakeAcControlRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Kondisi abnormal'), findsOneWidget);
+    expect(find.text('Suhu di luar batas normal.'), findsOneWidget);
+    expect(find.text('Di luar batas'), findsOneWidget);
+    expect(find.text('Batas normal 16–20 °C'), findsOneWidget);
+    expect(find.text('Batas normal 40–60%'), findsOneWidget);
+    expect(find.text('Dievaluasi 01/01/1970 07:00:00 WIB'), findsOneWidget);
+  });
+
+  testWidgets('kondisi normal dan belum dievaluasi', (tester) async {
+    final auth = FakeAuthRepository(true);
+    const reading = LatestReading(
+      temperature: 18,
+      humidity: 50,
+      timestampMillis: 0,
+    );
+    final monitoring = FakeMonitoringRepository(
+      const MonitoringSnapshot(reading: reading, isOnline: true),
+    );
+    addTearDown(auth.dispose);
+    addTearDown(monitoring.dispose);
+
+    await tester.pumpWidget(
+      AppMonitoringApp(
+        authRepository: auth,
+        monitoringRepository: monitoring,
+        historyRepository: FakeHistoryRepository(),
+        thresholdRepository: FakeThresholdRepository(),
+        acControlRepository: FakeAcControlRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Kondisi belum dievaluasi'), findsOneWidget);
+
+    monitoring.emit(
+      const MonitoringSnapshot(
+        reading: reading,
+        isOnline: true,
+        alert: AlertState(status: AlertStatus.normal),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Kondisi normal'), findsOneWidget);
+    expect(find.text('Di luar batas'), findsNothing);
+  });
+
+  testWidgets('menampilkan banner saat aplikasi terputus dari server', (
+    tester,
+  ) async {
+    final auth = FakeAuthRepository(true);
+    final monitoring = FakeMonitoringRepository(
+      const MonitoringSnapshot(isOnline: false, isConnected: false),
+    );
+    addTearDown(auth.dispose);
+    addTearDown(monitoring.dispose);
+
+    await tester.pumpWidget(
+      AppMonitoringApp(
+        authRepository: auth,
+        monitoringRepository: monitoring,
+        historyRepository: FakeHistoryRepository(),
+        thresholdRepository: FakeThresholdRepository(),
+        acControlRepository: FakeAcControlRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Aplikasi tidak terhubung ke server. Data dapat tertinggal.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('menampilkan galat bila Firebase gagal dimulai', (tester) async {

@@ -4,12 +4,18 @@ const databaseUrl = process.env.DATABASE_URL ??
   'https://monitoring-sppg-81246-default-rtdb.asia-southeast1.firebasedatabase.app';
 const email = process.env.DEVICE_EMAIL;
 const password = process.env.DEVICE_PASSWORD;
+// Alternatif tanpa password: custom token untuk UID akun perangkat, dibuat
+// dengan Admin SDK (createCustomToken). Token hanya berlaku 1 jam untuk login;
+// setelah itu simulator memperpanjang sesi dengan refresh token seperti biasa.
+const customToken = process.env.DEVICE_CUSTOM_TOKEN;
 const latestIntervalMs = Number(process.env.LATEST_INTERVAL_MS ?? 5000);
 const historyIntervalMs = Number(process.env.HISTORY_INTERVAL_MS ?? 1800000);
 const ackPollMs = Number(process.env.ACK_POLL_MS ?? 1000);
 
-if (!email || !password) {
-  console.error('DEVICE_EMAIL dan DEVICE_PASSWORD wajib diisi.');
+if (!customToken && (!email || !password)) {
+  console.error(
+    'Isi DEVICE_EMAIL dan DEVICE_PASSWORD, atau DEVICE_CUSTOM_TOKEN.',
+  );
   process.exit(1);
 }
 
@@ -21,7 +27,31 @@ let humidity = 55;
 let lastHistoryAt = 0;
 let acking = false;
 
+async function signInWithCustomToken() {
+  const response = await fetch(
+    `https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: customToken, returnSecureToken: true }),
+    },
+  );
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(`Login gagal: ${data.error?.message ?? response.status}`);
+  }
+  idToken = data.idToken;
+  refreshToken = data.refreshToken;
+  const payload = JSON.parse(
+    Buffer.from(idToken.split('.')[1], 'base64url').toString('utf8'),
+  );
+  uid = payload.user_id;
+}
+
 async function signIn() {
+  if (customToken) {
+    return signInWithCustomToken();
+  }
   const response = await fetch(
     `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`,
     {
@@ -126,15 +156,18 @@ async function acknowledgeCommands() {
   }
   acking = true;
   try {
-    const commands = await get('devices/ac_control/commands');
+    // Ambil perintah dan ack masing-masing sekali per putaran. Mengecek ack
+    // satu per satu membuat satu putaran makin lama seiring bertambahnya
+    // perintah tersimpan, sampai melewati batas konfirmasi 5 detik (PRD F5.6).
+    const [commands, acknowledgements] = await Promise.all([
+      get('devices/ac_control/commands'),
+      get('devices/ac_control/acknowledgements'),
+    ]);
     if (!commands) {
       return;
     }
     for (const [commandId, command] of Object.entries(commands)) {
-      const existing = await get(
-        `devices/ac_control/acknowledgements/${commandId}`,
-      );
-      if (existing) {
+      if (acknowledgements?.[commandId]) {
         continue;
       }
       await put(`devices/ac_control/acknowledgements/${commandId}`, {
@@ -155,7 +188,10 @@ async function acknowledgeCommands() {
 
 async function main() {
   await signIn();
-  console.log(`Login sebagai ${email} (UID ${uid})`);
+  console.log(
+    `Login sebagai ${customToken ? 'perangkat (custom token)' : email} ` +
+      `(UID ${uid})`,
+  );
 
   if (process.env.DRY_RUN === '1') {
     return;

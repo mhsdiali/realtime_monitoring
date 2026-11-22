@@ -2,6 +2,8 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/time/wib_time.dart';
+import '../thresholds/threshold_repository.dart';
+import '../thresholds/thresholds.dart';
 import 'history_reading.dart';
 import 'history_repository.dart';
 
@@ -17,9 +19,16 @@ enum HistoryRange {
 }
 
 class HistoryPage extends StatefulWidget {
-  const HistoryPage({super.key, required this.repository});
+  const HistoryPage({
+    super.key,
+    required this.repository,
+    this.thresholdRepository,
+  });
 
   final HistoryRepository repository;
+
+  /// Opsional: bila tersedia, batas normal digambar sebagai garis di grafik.
+  final ThresholdRepository? thresholdRepository;
 
   @override
   State<HistoryPage> createState() => _HistoryPageState();
@@ -27,7 +36,7 @@ class HistoryPage extends StatefulWidget {
 
 class _HistoryPageState extends State<HistoryPage> {
   HistoryRange _range = HistoryRange.twentyFourHours;
-  late Future<List<HistoryReading>> _history;
+  late Future<(List<HistoryReading>, Thresholds?)> _history;
 
   @override
   void initState() {
@@ -35,10 +44,22 @@ class _HistoryPageState extends State<HistoryPage> {
     _history = _fetch();
   }
 
-  Future<List<HistoryReading>> _fetch() {
+  Future<(List<HistoryReading>, Thresholds?)> _fetch() async {
     final fromMillis =
         DateTime.now().millisecondsSinceEpoch - _range.duration.inMilliseconds;
-    return widget.repository.fetchHistory(fromMillis: fromMillis);
+    final readings = widget.repository.fetchHistory(fromMillis: fromMillis);
+    final thresholds = _loadThresholds();
+    return (await readings, await thresholds);
+  }
+
+  /// Batas normal hanya pelengkap grafik; kegagalannya tidak boleh
+  /// menggagalkan tampilan riwayat.
+  Future<Thresholds?> _loadThresholds() async {
+    try {
+      return await widget.thresholdRepository?.loadThresholds();
+    } catch (_) {
+      return null;
+    }
   }
 
   void _reload() {
@@ -77,7 +98,7 @@ class _HistoryPageState extends State<HistoryPage> {
             child: _RangeSelector(selected: _range, onSelected: _selectRange),
           ),
           Expanded(
-            child: FutureBuilder<List<HistoryReading>>(
+            child: FutureBuilder<(List<HistoryReading>, Thresholds?)>(
               future: _history,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -95,7 +116,8 @@ class _HistoryPageState extends State<HistoryPage> {
                   );
                 }
 
-                final readings = snapshot.data ?? const <HistoryReading>[];
+                final readings = snapshot.data?.$1 ?? const <HistoryReading>[];
+                final thresholds = snapshot.data?.$2;
                 if (readings.isEmpty) {
                   return const _HistoryMessage(
                     icon: Icons.history_toggle_off,
@@ -105,7 +127,11 @@ class _HistoryPageState extends State<HistoryPage> {
                   );
                 }
 
-                return _HistoryContent(readings: readings, range: _range);
+                return _HistoryContent(
+                  readings: readings,
+                  range: _range,
+                  thresholds: thresholds,
+                );
               },
             ),
           ),
@@ -138,10 +164,15 @@ class _RangeSelector extends StatelessWidget {
 }
 
 class _HistoryContent extends StatelessWidget {
-  const _HistoryContent({required this.readings, required this.range});
+  const _HistoryContent({
+    required this.readings,
+    required this.range,
+    required this.thresholds,
+  });
 
   final List<HistoryReading> readings;
   final HistoryRange range;
+  final Thresholds? thresholds;
 
   @override
   Widget build(BuildContext context) {
@@ -157,6 +188,9 @@ class _HistoryContent extends StatelessWidget {
           readings: readings,
           range: range,
           valueOf: (reading) => reading.temperature,
+          bounds: thresholds == null
+              ? null
+              : (thresholds!.temperatureMin, thresholds!.temperatureMax),
         ),
         const SizedBox(height: 12),
         _ReadingChartCard(
@@ -167,6 +201,9 @@ class _HistoryContent extends StatelessWidget {
           readings: readings,
           range: range,
           valueOf: (reading) => reading.humidity,
+          bounds: thresholds == null
+              ? null
+              : (thresholds!.humidityMin, thresholds!.humidityMax),
         ),
         const SizedBox(height: 24),
         Text('Daftar nilai', style: Theme.of(context).textTheme.titleMedium),
@@ -198,6 +235,7 @@ class _ReadingChartCard extends StatelessWidget {
     required this.readings,
     required this.range,
     required this.valueOf,
+    required this.bounds,
   });
 
   final IconData icon;
@@ -207,6 +245,7 @@ class _ReadingChartCard extends StatelessWidget {
   final List<HistoryReading> readings;
   final HistoryRange range;
   final double Function(HistoryReading) valueOf;
+  final (double, double)? bounds;
 
   @override
   Widget build(BuildContext context) {
@@ -227,6 +266,17 @@ class _ReadingChartCard extends StatelessWidget {
                 ),
               ],
             ),
+            if (bounds case (final min, final max)) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Garis merah: batas normal '
+                '${_formatBound(min)}–${_formatBound(max)}'
+                '${unit == '%' ? '' : ' '}$unit',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
             const SizedBox(height: 20),
             SizedBox(
               height: 220,
@@ -235,6 +285,7 @@ class _ReadingChartCard extends StatelessWidget {
                 color: color,
                 range: range,
                 valueOf: valueOf,
+                bounds: bounds,
               ),
             ),
           ],
@@ -250,19 +301,22 @@ class _ReadingLineChart extends StatelessWidget {
     required this.color,
     required this.range,
     required this.valueOf,
+    required this.bounds,
   });
 
   final List<HistoryReading> readings;
   final Color color;
   final HistoryRange range;
   final double Function(HistoryReading) valueOf;
+  final (double, double)? bounds;
 
   @override
   Widget build(BuildContext context) {
     final values = [for (final reading in readings) valueOf(reading)];
+    final limits = bounds;
     var minY = values.first;
     var maxY = values.first;
-    for (final value in values) {
+    for (final value in [...values, ?limits?.$1, ?limits?.$2]) {
       if (value < minY) {
         minY = value;
       }
@@ -385,6 +439,19 @@ class _ReadingLineChart extends StatelessWidget {
           horizontalInterval: yInterval,
         ),
         borderData: FlBorderData(show: false),
+        extraLinesData: limits == null
+            ? null
+            : ExtraLinesData(
+                horizontalLines: [
+                  for (final limit in [limits.$1, limits.$2])
+                    HorizontalLine(
+                      y: limit,
+                      color: Theme.of(context).colorScheme.error,
+                      strokeWidth: 1.5,
+                      dashArray: [6, 4],
+                    ),
+                ],
+              ),
       ),
     );
   }
@@ -434,4 +501,11 @@ class _HistoryMessage extends StatelessWidget {
 
 String _formatNumber(double value) {
   return value.toStringAsFixed(1).replaceAll('.', ',');
+}
+
+String _formatBound(double value) {
+  if (value == value.roundToDouble()) {
+    return value.toStringAsFixed(0);
+  }
+  return _formatNumber(value);
 }

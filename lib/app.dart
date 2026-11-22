@@ -31,7 +31,11 @@ class AppMonitoringApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Monitoring Gudang SPPG',
-      theme: ThemeData(colorScheme: .fromSeed(seedColor: Colors.green)),
+      debugShowCheckedModeBanner: false,
+      // Hijau yang sama dengan ikon aplikasi dan landing page.
+      theme: ThemeData(
+        colorScheme: .fromSeed(seedColor: const Color(0xFF1F6F43)),
+      ),
       home: firebaseError == null
           ? AuthGate(
               repository: authRepository!,

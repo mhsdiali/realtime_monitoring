@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show Color;
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -45,7 +46,7 @@ class NotificationService {
     );
     await _localNotifications.initialize(
       settings: const InitializationSettings(
-        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        android: AndroidInitializationSettings('@drawable/ic_notification'),
       ),
       onDidReceiveNotificationResponse: (_) {
         tabController.value = 0;
@@ -178,6 +179,7 @@ class NotificationService {
                 'Notifikasi kondisi gudang dan status perangkat.',
             importance: Importance.high,
             priority: Priority.high,
+            color: Color(0xFF1F6F43),
           ),
         ),
         payload: 'dashboard',

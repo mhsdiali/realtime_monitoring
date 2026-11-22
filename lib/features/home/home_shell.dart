@@ -71,7 +71,10 @@ class _HomeShellState extends State<HomeShell> {
             authRepository: widget.authRepository,
             monitoringRepository: widget.monitoringRepository,
           ),
-          HistoryPage(repository: widget.historyRepository),
+          HistoryPage(
+            repository: widget.historyRepository,
+            thresholdRepository: widget.thresholdRepository,
+          ),
           AcControlPage(
             repository: widget.acControlRepository,
             monitoringRepository: widget.monitoringRepository,
