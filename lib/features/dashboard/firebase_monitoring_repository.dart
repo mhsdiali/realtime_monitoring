@@ -41,7 +41,8 @@ class FirebaseMonitoringRepository implements MonitoringRepository {
       final since = disconnectedSince;
       final isConnected =
           connected ||
-          (since != null && DateTime.now().difference(since) < _disconnectGrace);
+          (since != null &&
+              DateTime.now().difference(since) < _disconnectGrace);
       controller.add(
         MonitoringSnapshot(
           reading: reading,

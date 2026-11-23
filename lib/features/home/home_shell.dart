@@ -7,8 +7,8 @@ import '../dashboard/dashboard_page.dart';
 import '../dashboard/monitoring_repository.dart';
 import '../history/history_page.dart';
 import '../history/history_repository.dart';
+import '../settings/settings_page.dart';
 import '../thresholds/threshold_repository.dart';
-import '../thresholds/thresholds_page.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({
@@ -79,7 +79,7 @@ class _HomeShellState extends State<HomeShell> {
             repository: widget.acControlRepository,
             monitoringRepository: widget.monitoringRepository,
           ),
-          ThresholdsPage(repository: widget.thresholdRepository),
+          SettingsPage(repository: widget.thresholdRepository),
         ],
       ),
       bottomNavigationBar: NavigationBar(

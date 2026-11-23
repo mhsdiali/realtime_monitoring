@@ -195,9 +195,9 @@ class _ConnectionBanner extends StatelessWidget {
           Expanded(
             child: Text(
               'Aplikasi tidak terhubung ke server. Data dapat tertinggal.',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: colorScheme.onInverseSurface),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onInverseSurface,
+              ),
             ),
           ),
         ],
@@ -279,31 +279,36 @@ class _ConditionCard extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final current = alert;
 
-    final (IconData icon, String title, String detail, Color background, Color foreground) =
-        switch (current) {
-          null => (
-            Icons.help_outline,
-            'Kondisi belum dievaluasi',
-            'Status normal atau abnormal dihitung oleh server notifikasi '
-                'dan akan tampil setelah evaluasi pertama.',
-            colorScheme.surfaceContainerHighest,
-            colorScheme.onSurface,
-          ),
-          AlertState(isAbnormal: true) => (
-            Icons.warning_amber_rounded,
-            'Kondisi abnormal',
-            _abnormalDetail(current),
-            colorScheme.errorContainer,
-            colorScheme.onErrorContainer,
-          ),
-          _ => (
-            Icons.verified_outlined,
-            'Kondisi normal',
-            'Suhu dan kelembapan dalam batas normal.',
-            colorScheme.primaryContainer,
-            colorScheme.onPrimaryContainer,
-          ),
-        };
+    final (
+      IconData icon,
+      String title,
+      String detail,
+      Color background,
+      Color foreground,
+    ) = switch (current) {
+      null => (
+        Icons.help_outline,
+        'Kondisi belum dievaluasi',
+        'Status normal atau abnormal dihitung oleh server notifikasi '
+            'dan akan tampil setelah evaluasi pertama.',
+        colorScheme.surfaceContainerHighest,
+        colorScheme.onSurface,
+      ),
+      AlertState(isAbnormal: true) => (
+        Icons.warning_amber_rounded,
+        'Kondisi abnormal',
+        _abnormalDetail(current),
+        colorScheme.errorContainer,
+        colorScheme.onErrorContainer,
+      ),
+      _ => (
+        Icons.verified_outlined,
+        'Kondisi normal',
+        'Suhu dan kelembapan dalam batas normal.',
+        colorScheme.primaryContainer,
+        colorScheme.onPrimaryContainer,
+      ),
+    };
 
     final notes = <String>[
       if (current?.updatedAtMillis case final updatedAt?)

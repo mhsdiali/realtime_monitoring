@@ -11,6 +11,7 @@ const customToken = process.env.DEVICE_CUSTOM_TOKEN;
 const latestIntervalMs = Number(process.env.LATEST_INTERVAL_MS ?? 5000);
 const historyIntervalMs = Number(process.env.HISTORY_INTERVAL_MS ?? 1800000);
 const ackPollMs = Number(process.env.ACK_POLL_MS ?? 1000);
+const ackRetentionMs = Number(process.env.ACK_RETENTION_MS ?? 10000);
 
 if (!customToken && (!email || !password)) {
   console.error(
@@ -115,6 +116,17 @@ async function get(path) {
   return response.json();
 }
 
+async function remove(path) {
+  const response = await fetch(
+    `${databaseUrl}/${path}.json?auth=${encodeURIComponent(idToken)}`,
+    { method: 'DELETE' },
+  );
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Hapus ${path} gagal: ${response.status} ${text}`);
+  }
+}
+
 function nextReading() {
   temperature = Math.min(
     39,
@@ -167,7 +179,20 @@ async function acknowledgeCommands() {
       return;
     }
     for (const [commandId, command] of Object.entries(commands)) {
-      if (acknowledgements?.[commandId]) {
+      const acknowledgement = acknowledgements?.[commandId];
+      if (acknowledgement) {
+        const processedAt = acknowledgement.processed_at;
+        if (
+          typeof processedAt === 'number' &&
+          Date.now() - processedAt >= ackRetentionMs
+        ) {
+          await remove(`devices/ac_control/commands/${commandId}`);
+          await remove(`devices/ac_control/acknowledgements/${commandId}`);
+          console.log(
+            `[${formatTime(Date.now())} WIB] Hapus perintah ${commandId} ` +
+              'setelah ack.',
+          );
+        }
         continue;
       }
       await put(`devices/ac_control/acknowledgements/${commandId}`, {

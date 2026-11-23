@@ -135,7 +135,7 @@ class _ThresholdsPageState extends State<ThresholdsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Pengaturan')),
+      appBar: AppBar(title: const Text('Batas normal')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _loadError != null

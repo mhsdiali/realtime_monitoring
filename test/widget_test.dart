@@ -10,6 +10,7 @@ import 'package:app_monitoring/features/dashboard/alert_state.dart';
 import 'package:app_monitoring/features/dashboard/latest_reading.dart';
 import 'package:app_monitoring/features/dashboard/monitoring_repository.dart';
 import 'package:app_monitoring/features/dashboard/monitoring_snapshot.dart';
+import 'package:app_monitoring/features/history/alert_history_entry.dart';
 import 'package:app_monitoring/features/history/history_reading.dart';
 import 'package:app_monitoring/features/history/history_repository.dart';
 import 'package:app_monitoring/features/thresholds/threshold_repository.dart';
@@ -18,6 +19,31 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('menampilkan splash sebelum halaman login', (tester) async {
+    final auth = FakeAuthRepository();
+    final monitoring = FakeMonitoringRepository();
+    addTearDown(auth.dispose);
+    addTearDown(monitoring.dispose);
+
+    await tester.pumpWidget(
+      AppMonitoringApp(
+        authRepository: auth,
+        monitoringRepository: monitoring,
+        historyRepository: FakeHistoryRepository(),
+        thresholdRepository: FakeThresholdRepository(),
+        acControlRepository: FakeAcControlRepository(),
+      ),
+    );
+
+    expect(find.byKey(const Key('splash-screen')), findsOneWidget);
+    expect(find.text('Monitoring Gudang'), findsOneWidget);
+
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('splash-screen')), findsNothing);
+    expect(find.widgetWithText(FilledButton, 'Masuk'), findsOneWidget);
+  });
+
   testWidgets('menampilkan halaman login saat belum masuk', (tester) async {
     final auth = FakeAuthRepository();
     final monitoring = FakeMonitoringRepository();
@@ -36,6 +62,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Monitoring Gudang'), findsOneWidget);
+    expect(find.byKey(const Key('login-logo')), findsOneWidget);
+    expect(find.byIcon(Icons.warehouse_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.thermostat), findsNothing);
     expect(find.widgetWithText(FilledButton, 'Masuk'), findsOneWidget);
     expect(find.byType(TextFormField), findsNWidgets(2));
     expect(find.text('Daftar'), findsNothing);
@@ -217,7 +246,7 @@ void main() {
     expect(find.text('24,5 °C'), findsNothing);
   });
 
-  testWidgets('tab Riwayat menampilkan grafik dan daftar nilai', (
+  testWidgets('tab Riwayat menampilkan grafik dan peringatan abnormal', (
     tester,
   ) async {
     final auth = FakeAuthRepository(true);
@@ -226,6 +255,22 @@ void main() {
       readings: const [
         HistoryReading(temperature: 24.5, humidity: 55, timestampMillis: 0),
         HistoryReading(temperature: 25, humidity: 60, timestampMillis: 60000),
+      ],
+      alertHistory: const [
+        AlertHistoryEntry(
+          status: 'abnormal',
+          activeParameters: ['temperature'],
+          temperature: 24.5,
+          humidity: 55,
+          timestampMillis: 3600000,
+        ),
+        AlertHistoryEntry(
+          status: 'abnormal',
+          activeParameters: ['humidity'],
+          temperature: 25,
+          humidity: 65,
+          timestampMillis: 7200000,
+        ),
       ],
     );
     addTearDown(auth.dispose);
@@ -251,11 +296,46 @@ void main() {
     expect(find.text('24 jam'), findsOneWidget);
     expect(find.text('7 hari'), findsOneWidget);
 
-    await tester.drag(find.byType(ListView), const Offset(0, -600));
+    await tester.drag(find.byType(ListView), const Offset(0, -1200));
     await tester.pumpAndSettle();
 
-    expect(find.text('01/01/1970 07:00:00 WIB'), findsOneWidget);
-    expect(find.text('01/01/1970 07:01:00 WIB'), findsOneWidget);
+    expect(find.text('5 peringatan terakhir'), findsOneWidget);
+    expect(find.text('Suhu di luar batas'), findsOneWidget);
+    expect(find.text('Kelembapan di luar batas'), findsOneWidget);
+    expect(find.text('01/01/1970 08:00:00 WIB'), findsOneWidget);
+    expect(find.text('01/01/1970 09:00:00 WIB'), findsOneWidget);
+  });
+
+  testWidgets('riwayat menampilkan pesan bila belum ada peringatan', (
+    tester,
+  ) async {
+    final auth = FakeAuthRepository(true);
+    final monitoring = FakeMonitoringRepository();
+    addTearDown(auth.dispose);
+    addTearDown(monitoring.dispose);
+
+    await tester.pumpWidget(
+      AppMonitoringApp(
+        authRepository: auth,
+        monitoringRepository: monitoring,
+        historyRepository: FakeHistoryRepository(
+          readings: const [
+            HistoryReading(temperature: 18, humidity: 50, timestampMillis: 0),
+          ],
+        ),
+        thresholdRepository: FakeThresholdRepository(),
+        acControlRepository: FakeAcControlRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Riwayat'));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView), const Offset(0, -1200));
+    await tester.pumpAndSettle();
+
+    expect(find.text('5 peringatan terakhir'), findsOneWidget);
+    expect(find.text('Belum ada peringatan abnormal.'), findsOneWidget);
   });
 
   testWidgets('grafik riwayat menampilkan batas normal', (tester) async {
@@ -286,14 +366,12 @@ void main() {
     await tester.tap(find.text('Riwayat'));
     await tester.pumpAndSettle();
 
-    expect(
-      find.text('Garis merah: batas normal 16–20 °C'),
-      findsOneWidget,
-    );
-    expect(
-      find.text('Garis merah: batas normal 40–60%'),
-      findsOneWidget,
-    );
+    expect(find.text('Garis merah: batas normal 16–20 °C'), findsOneWidget);
+
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Garis merah: batas normal 40–60%'), findsOneWidget);
   });
 
   testWidgets('riwayat tetap tampil bila batas normal gagal dimuat', (
@@ -409,7 +487,7 @@ void main() {
     expect(find.text('Gagal memuat riwayat.'), findsOneWidget);
   });
 
-  testWidgets('tab Pengaturan menampilkan threshold awal', (tester) async {
+  testWidgets('tab Pengaturan membuka menu batas normal', (tester) async {
     final auth = FakeAuthRepository(true);
     final monitoring = FakeMonitoringRepository();
     final history = FakeHistoryRepository();
@@ -432,7 +510,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.widgetWithText(AppBar, 'Pengaturan'), findsOneWidget);
-    expect(find.text('Batas normal'), findsOneWidget);
+    expect(find.byKey(const Key('settings-threshold-tile')), findsOneWidget);
+    expect(find.byKey(const Key('threshold-temperature-min')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('settings-threshold-tile')));
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(AppBar, 'Batas normal'), findsOneWidget);
     expect(find.text('16'), findsOneWidget);
     expect(find.text('20'), findsOneWidget);
     expect(find.text('40'), findsOneWidget);
@@ -458,8 +542,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Pengaturan'));
-    await tester.pumpAndSettle();
+    await openThresholdSettings(tester);
 
     await tester.enterText(
       find.byKey(const Key('threshold-temperature-min')),
@@ -520,8 +603,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Pengaturan'));
-    await tester.pumpAndSettle();
+    await openThresholdSettings(tester);
 
     await tester.enterText(
       find.byKey(const Key('threshold-temperature-min')),
@@ -560,8 +642,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Pengaturan'));
-    await tester.pumpAndSettle();
+    await openThresholdSettings(tester);
 
     expect(find.text('Gagal memuat threshold.'), findsOneWidget);
   });
@@ -598,6 +679,22 @@ void main() {
       find.widgetWithText(FilledButton, 'Nyalakan AC'),
     );
     expect(button.onPressed, isNull);
+    final sendSetpoint = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Kirim Suhu'),
+    );
+    expect(sendSetpoint.onPressed, isNull);
+    final increase = tester.widget<IconButton>(
+      find.byKey(const Key('ac-setpoint-increase')),
+    );
+    expect(increase.onPressed, isNull);
+    final jetMode = tester.widget<SegmentedButton<bool>>(
+      find.byKey(const Key('ac-jet-mode')),
+    );
+    expect(jetMode.onSelectionChanged, isNull);
+    final swingMode = tester.widget<SegmentedButton<bool>>(
+      find.byKey(const Key('ac-swing-mode')),
+    );
+    expect(swingMode.onSelectionChanged, isNull);
   });
 
   testWidgets('menyalakan AC menampilkan sinyal dipancarkan', (tester) async {
@@ -627,7 +724,7 @@ void main() {
     await tester.tap(find.text('Nyalakan AC'));
     await tester.pumpAndSettle();
 
-    expect(ac.sent.single, (AcAction.turnOn, null));
+    expect(ac.sent.single, (AcAction.turnOn, null, null));
     expect(find.text('Menunggu konfirmasi perangkat...'), findsOneWidget);
 
     ac.emitAcknowledgement(const AcAcknowledgement(status: 'transmitted'));
@@ -677,10 +774,12 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Matikan'));
     await tester.pumpAndSettle();
 
-    expect(ac.sent.single, (AcAction.turnOff, null));
+    expect(ac.sent.single, (AcAction.turnOff, null, null));
   });
 
-  testWidgets('memvalidasi setpoint AC 16-30 derajat', (tester) async {
+  testWidgets('mengatur setpoint AC dengan tombol minus dan plus', (
+    tester,
+  ) async {
     final auth = FakeAuthRepository(true);
     final monitoring = FakeMonitoringRepository(
       const MonitoringSnapshot(isOnline: true),
@@ -704,19 +803,135 @@ void main() {
     await tester.tap(find.text('Kontrol AC'));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byKey(const Key('ac-setpoint')), '31');
+    final increase = find.byKey(const Key('ac-setpoint-increase'));
+    final decrease = find.byKey(const Key('ac-setpoint-decrease'));
+    expect(find.text('24 °C'), findsOneWidget);
+
+    for (var i = 0; i < 6; i++) {
+      await tester.tap(increase);
+    }
+    await tester.pumpAndSettle();
+    expect(find.text('30 °C'), findsOneWidget);
+    expect(tester.widget<IconButton>(increase).onPressed, isNull);
+
+    for (var i = 0; i < 14; i++) {
+      await tester.tap(decrease);
+    }
+    await tester.pumpAndSettle();
+    expect(find.text('16 °C'), findsOneWidget);
+    expect(tester.widget<IconButton>(decrease).onPressed, isNull);
+
+    for (var i = 0; i < 8; i++) {
+      await tester.tap(increase);
+    }
+    await tester.pumpAndSettle();
+    expect(find.text('24 °C'), findsOneWidget);
+    expect(ac.sent, isEmpty);
+
     await tester.ensureVisible(find.text('Kirim Suhu'));
     await tester.tap(find.text('Kirim Suhu'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Suhu harus 16–30 °C.'), findsOneWidget);
-    expect(ac.sent, isEmpty);
+    expect(ac.sent.single, (AcAction.setTemperature, 24.0, null));
+  });
 
-    await tester.enterText(find.byKey(const Key('ac-setpoint')), '24');
-    await tester.tap(find.text('Kirim Suhu'));
+  testWidgets('mengirim mode JET dan Non JET', (tester) async {
+    final auth = FakeAuthRepository(true);
+    final monitoring = FakeMonitoringRepository(
+      const MonitoringSnapshot(isOnline: true),
+    );
+    final ac = FakeAcControlRepository();
+    addTearDown(auth.dispose);
+    addTearDown(monitoring.dispose);
+    addTearDown(ac.dispose);
+
+    await tester.pumpWidget(
+      AppMonitoringApp(
+        authRepository: auth,
+        monitoringRepository: monitoring,
+        historyRepository: FakeHistoryRepository(),
+        thresholdRepository: FakeThresholdRepository(),
+        acControlRepository: ac,
+      ),
+    );
     await tester.pumpAndSettle();
 
-    expect(ac.sent.single, (AcAction.setTemperature, 24.0));
+    await tester.tap(find.text('Kontrol AC'));
+    await tester.pumpAndSettle();
+
+    final jetMode = find.byKey(const Key('ac-jet-mode'));
+    await tester.ensureVisible(jetMode);
+    expect(tester.widget<SegmentedButton<bool>>(jetMode).selected, isEmpty);
+
+    await tester.tap(find.descendant(of: jetMode, matching: find.text('JET')));
+    await tester.pumpAndSettle();
+
+    expect(ac.sent.single, (AcAction.setJet, null, true));
+    expect(find.text('Menunggu konfirmasi perangkat...'), findsOneWidget);
+    expect(tester.widget<SegmentedButton<bool>>(jetMode).selected, {true});
+    final swingMode = tester.widget<SegmentedButton<bool>>(
+      find.byKey(const Key('ac-swing-mode')),
+    );
+    expect(swingMode.onSelectionChanged, isNull);
+
+    ac.emitAcknowledgement(const AcAcknowledgement(status: 'transmitted'));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(jetMode);
+    await tester.tap(
+      find.descendant(of: jetMode, matching: find.text('Non JET')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(ac.sent.last, (AcAction.setJet, null, false));
+    expect(tester.widget<SegmentedButton<bool>>(jetMode).selected, {false});
+  });
+
+  testWidgets('mengirim mode Swing dan Non Swing', (tester) async {
+    final auth = FakeAuthRepository(true);
+    final monitoring = FakeMonitoringRepository(
+      const MonitoringSnapshot(isOnline: true),
+    );
+    final ac = FakeAcControlRepository();
+    addTearDown(auth.dispose);
+    addTearDown(monitoring.dispose);
+    addTearDown(ac.dispose);
+
+    await tester.pumpWidget(
+      AppMonitoringApp(
+        authRepository: auth,
+        monitoringRepository: monitoring,
+        historyRepository: FakeHistoryRepository(),
+        thresholdRepository: FakeThresholdRepository(),
+        acControlRepository: ac,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Kontrol AC'));
+    await tester.pumpAndSettle();
+
+    final swingMode = find.byKey(const Key('ac-swing-mode'));
+    await tester.ensureVisible(swingMode);
+    await tester.tap(
+      find.descendant(of: swingMode, matching: find.text('Swing')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(ac.sent.single, (AcAction.setSwing, null, true));
+    expect(tester.widget<SegmentedButton<bool>>(swingMode).selected, {true});
+
+    ac.emitAcknowledgement(const AcAcknowledgement(status: 'transmitted'));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(swingMode);
+    await tester.tap(
+      find.descendant(of: swingMode, matching: find.text('Non Swing')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(ac.sent.last, (AcAction.setSwing, null, false));
+    expect(tester.widget<SegmentedButton<bool>>(swingMode).selected, {false});
   });
 
   testWidgets('menampilkan timeout setelah 5 detik tanpa ack', (tester) async {
@@ -962,6 +1177,13 @@ void main() {
   });
 }
 
+Future<void> openThresholdSettings(WidgetTester tester) async {
+  await tester.tap(find.text('Pengaturan'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const Key('settings-threshold-tile')));
+  await tester.pumpAndSettle();
+}
+
 class FakeAuthRepository implements AuthRepository {
   FakeAuthRepository([this._signedIn = false]);
 
@@ -1021,11 +1243,16 @@ class FakeMonitoringRepository implements MonitoringRepository {
 }
 
 class FakeHistoryRepository implements HistoryRepository {
-  FakeHistoryRepository({this.readings = const []});
+  FakeHistoryRepository({
+    this.readings = const [],
+    this.alertHistory = const [],
+  });
 
   final List<HistoryReading> readings;
+  final List<AlertHistoryEntry> alertHistory;
   final List<int> calls = [];
   bool shouldFail = false;
+  bool shouldFailAlertHistory = false;
 
   @override
   Future<List<HistoryReading>> fetchHistory({required int fromMillis}) async {
@@ -1034,6 +1261,14 @@ class FakeHistoryRepository implements HistoryRepository {
       throw Exception('riwayat gagal');
     }
     return readings;
+  }
+
+  @override
+  Future<List<AlertHistoryEntry>> fetchAlertHistory({int limit = 5}) async {
+    if (shouldFailAlertHistory) {
+      throw Exception('alert history gagal');
+    }
+    return alertHistory.take(limit).toList();
   }
 }
 
@@ -1063,15 +1298,16 @@ class FakeThresholdRepository implements ThresholdRepository {
 }
 
 class FakeAcControlRepository implements AcControlRepository {
-  final List<(AcAction, double?)> sent = [];
+  final List<(AcAction, double?, bool?)> sent = [];
   final _acknowledgements = StreamController<AcAcknowledgement?>.broadcast();
 
   @override
   Future<String> sendCommand({
     required AcAction action,
     double? setpoint,
+    bool? enabled,
   }) async {
-    sent.add((action, setpoint));
+    sent.add((action, setpoint, enabled));
     return 'cmd-${sent.length}';
   }
 

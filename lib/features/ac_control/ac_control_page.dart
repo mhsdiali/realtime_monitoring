@@ -24,13 +24,16 @@ class AcControlPage extends StatefulWidget {
 }
 
 class _AcControlPageState extends State<AcControlPage> {
-  final _setpointFormKey = GlobalKey<FormState>();
-  final _setpointController = TextEditingController();
+  static const _minSetpoint = 16.0;
+  static const _maxSetpoint = 30.0;
 
   late Stream<MonitoringSnapshot> _statusStream;
   StreamSubscription<dynamic>? _ackSubscription;
   Timer? _ackTimer;
   _CommandPhase _phase = _CommandPhase.idle;
+  double _setpoint = 24;
+  bool? _jetEnabled;
+  bool? _swingEnabled;
 
   bool get _busy =>
       _phase == _CommandPhase.sending || _phase == _CommandPhase.waiting;
@@ -45,17 +48,23 @@ class _AcControlPageState extends State<AcControlPage> {
   void dispose() {
     _ackSubscription?.cancel();
     _ackTimer?.cancel();
-    _setpointController.dispose();
     super.dispose();
   }
 
-  Future<void> _send(
+  void _changeSetpoint(double delta) {
+    setState(() {
+      _setpoint = (_setpoint + delta).clamp(_minSetpoint, _maxSetpoint);
+    });
+  }
+
+  Future<bool> _send(
     AcAction action, {
     double? setpoint,
+    bool? enabled,
     required bool isOnline,
   }) async {
     if (!isOnline || _busy) {
-      return;
+      return false;
     }
 
     _ackSubscription?.cancel();
@@ -66,17 +75,20 @@ class _AcControlPageState extends State<AcControlPage> {
       final commandId = await widget.repository.sendCommand(
         action: action,
         setpoint: setpoint,
+        enabled: enabled,
       );
       if (!mounted) {
-        return;
+        return true;
       }
       setState(() => _phase = _CommandPhase.waiting);
       _listenForAcknowledgement(commandId);
+      return true;
     } catch (_) {
       if (!mounted) {
-        return;
+        return false;
       }
       setState(() => _phase = _CommandPhase.error);
+      return false;
     }
   }
 
@@ -140,13 +152,41 @@ class _AcControlPageState extends State<AcControlPage> {
   }
 
   Future<void> _sendSetpoint(bool isOnline) async {
-    if (!_setpointFormKey.currentState!.validate()) {
+    await _send(
+      AcAction.setTemperature,
+      setpoint: _setpoint,
+      isOnline: isOnline,
+    );
+  }
+
+  Future<void> _setMode(
+    AcAction action,
+    bool enabled, {
+    required bool isOnline,
+  }) async {
+    final previous = action == AcAction.setJet ? _jetEnabled : _swingEnabled;
+    if (!isOnline || _busy || previous == enabled) {
       return;
     }
-    final value = double.parse(
-      _setpointController.text.trim().replaceAll(',', '.'),
-    );
-    await _send(AcAction.setTemperature, setpoint: value, isOnline: isOnline);
+
+    setState(() {
+      if (action == AcAction.setJet) {
+        _jetEnabled = enabled;
+      } else {
+        _swingEnabled = enabled;
+      }
+    });
+
+    final sent = await _send(action, enabled: enabled, isOnline: isOnline);
+    if (!sent && mounted) {
+      setState(() {
+        if (action == AcAction.setJet) {
+          _jetEnabled = previous;
+        } else {
+          _swingEnabled = previous;
+        }
+      });
+    }
   }
 
   @override
@@ -192,11 +232,65 @@ class _AcControlPageState extends State<AcControlPage> {
                           icon: const Icon(Icons.power_off),
                           label: const Text('Matikan AC'),
                         ),
-                        const SizedBox(height: 12),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Card(
+                  margin: EdgeInsets.zero,
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: .stretch,
+                      children: [
                         Text(
-                          'Aplikasi hanya memancarkan sinyal IR, bukan '
-                          'mengubah status AC secara langsung.',
+                          'Atur Suhu',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            IconButton.filledTonal(
+                              key: const Key('ac-setpoint-decrease'),
+                              onPressed: enabled && _setpoint > _minSetpoint
+                                  ? () => _changeSetpoint(-1)
+                                  : null,
+                              icon: const Icon(Icons.remove),
+                              iconSize: 32,
+                              tooltip: 'Turunkan suhu',
+                            ),
+                            const SizedBox(width: 24),
+                            Text(
+                              '${_setpoint.toInt()} °C',
+                              key: const Key('ac-setpoint-value'),
+                              style: Theme.of(context).textTheme.displaySmall,
+                            ),
+                            const SizedBox(width: 24),
+                            IconButton.filledTonal(
+                              key: const Key('ac-setpoint-increase'),
+                              onPressed: enabled && _setpoint < _maxSetpoint
+                                  ? () => _changeSetpoint(1)
+                                  : null,
+                              icon: const Icon(Icons.add),
+                              iconSize: 32,
+                              tooltip: 'Naikkan suhu',
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Rentang 16–30 °C',
+                          textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: 16),
+                        FilledButton(
+                          onPressed: enabled
+                              ? () => _sendSetpoint(isOnline)
+                              : null,
+                          child: const Text('Kirim Suhu'),
                         ),
                       ],
                     ),
@@ -205,54 +299,77 @@ class _AcControlPageState extends State<AcControlPage> {
                 const SizedBox(height: 12),
                 Card(
                   margin: EdgeInsets.zero,
-                  child: Form(
-                    key: _setpointFormKey,
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        crossAxisAlignment: .stretch,
-                        children: [
-                          Text(
-                            'Atur Suhu',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const SizedBox(height: 16),
-                          TextFormField(
-                            key: const Key('ac-setpoint'),
-                            controller: _setpointController,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: .stretch,
+                      children: [
+                        Text(
+                          'Mode AC',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'JET',
+                          style: Theme.of(context).textTheme.labelLarge,
+                        ),
+                        const SizedBox(height: 8),
+                        SegmentedButton<bool>(
+                          key: const Key('ac-jet-mode'),
+                          emptySelectionAllowed: true,
+                          selected: _jetEnabled == null
+                              ? <bool>{}
+                              : {_jetEnabled!},
+                          onSelectionChanged: enabled
+                              ? (selection) {
+                                  if (selection.isEmpty) {
+                                    return;
+                                  }
+                                  _setMode(
+                                    AcAction.setJet,
+                                    selection.first,
+                                    isOnline: isOnline,
+                                  );
+                                }
+                              : null,
+                          segments: const [
+                            ButtonSegment(value: false, label: Text('Non JET')),
+                            ButtonSegment(value: true, label: Text('JET')),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Swing',
+                          style: Theme.of(context).textTheme.labelLarge,
+                        ),
+                        const SizedBox(height: 8),
+                        SegmentedButton<bool>(
+                          key: const Key('ac-swing-mode'),
+                          emptySelectionAllowed: true,
+                          selected: _swingEnabled == null
+                              ? <bool>{}
+                              : {_swingEnabled!},
+                          onSelectionChanged: enabled
+                              ? (selection) {
+                                  if (selection.isEmpty) {
+                                    return;
+                                  }
+                                  _setMode(
+                                    AcAction.setSwing,
+                                    selection.first,
+                                    isOnline: isOnline,
+                                  );
+                                }
+                              : null,
+                          segments: const [
+                            ButtonSegment(
+                              value: false,
+                              label: Text('Non Swing'),
                             ),
-                            decoration: const InputDecoration(
-                              labelText: 'Suhu AC (°C)',
-                              hintText: '16–30',
-                              border: OutlineInputBorder(),
-                            ),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Suhu wajib diisi.';
-                              }
-                              final parsed = double.tryParse(
-                                value.trim().replaceAll(',', '.'),
-                              );
-                              if (parsed == null) {
-                                return 'Harus berupa angka.';
-                              }
-                              if (parsed < 16 || parsed > 30) {
-                                return 'Suhu harus 16–30 °C.';
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 12),
-                          FilledButton(
-                            onPressed: enabled
-                                ? () => _sendSetpoint(isOnline)
-                                : null,
-                            child: const Text('Kirim Suhu'),
-                          ),
-                        ],
-                      ),
+                            ButtonSegment(value: true, label: Text('Swing')),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
                 ),

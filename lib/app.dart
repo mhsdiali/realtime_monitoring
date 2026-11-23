@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
+import 'core/theme/brand.dart';
 import 'features/ac_control/ac_control_repository.dart';
 import 'features/auth/auth_gate.dart';
 import 'features/auth/auth_repository.dart';
 import 'features/dashboard/monitoring_repository.dart';
 import 'features/history/history_repository.dart';
+import 'features/splash/splash_gate.dart';
 import 'features/thresholds/threshold_repository.dart';
 
 class AppMonitoringApp extends StatelessWidget {
@@ -33,17 +35,17 @@ class AppMonitoringApp extends StatelessWidget {
       title: 'Monitoring Gudang SPPG',
       debugShowCheckedModeBanner: false,
       // Hijau yang sama dengan ikon aplikasi dan landing page.
-      theme: ThemeData(
-        colorScheme: .fromSeed(seedColor: const Color(0xFF1F6F43)),
-      ),
+      theme: ThemeData(colorScheme: .fromSeed(seedColor: brandGreen)),
       home: firebaseError == null
-          ? AuthGate(
-              repository: authRepository!,
-              monitoringRepository: monitoringRepository!,
-              historyRepository: historyRepository!,
-              thresholdRepository: thresholdRepository!,
-              acControlRepository: acControlRepository!,
-              tabController: tabController,
+          ? SplashGate(
+              child: AuthGate(
+                repository: authRepository!,
+                monitoringRepository: monitoringRepository!,
+                historyRepository: historyRepository!,
+                thresholdRepository: thresholdRepository!,
+                acControlRepository: acControlRepository!,
+                tabController: tabController,
+              ),
             )
           : const FirebaseErrorPage(),
     );

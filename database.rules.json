@@ -8,7 +8,7 @@
         ".write": "auth != null && auth.uid === 'VH3AIXTF47NIdjjdqNdRzMgGLQK2'",
         ".validate": "newData.hasChildren(['temperature', 'humidity', 'timestamp'])",
         "temperature": {
-          ".validate": "newData.isNumber() && newData.val() >= 10 && newData.val() <= 40"
+          ".validate": "newData.isNumber() && newData.val() >= -10 && newData.val() <= 60"
         },
         "humidity": {
           ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100"
@@ -25,7 +25,7 @@
           ".write": "auth != null && auth.uid === 'VH3AIXTF47NIdjjdqNdRzMgGLQK2' && !data.exists()",
           ".validate": "newData.hasChildren(['temperature', 'humidity', 'timestamp'])",
           "temperature": {
-            ".validate": "newData.isNumber() && newData.val() >= 10 && newData.val() <= 40"
+            ".validate": "newData.isNumber() && newData.val() >= -10 && newData.val() <= 60"
           },
           "humidity": {
             ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100"
@@ -55,12 +55,16 @@
           ".read": "auth != null",
           ".write": "auth != null && auth.uid !== 'VH3AIXTF47NIdjjdqNdRzMgGLQK2'",
           "$commandId": {
-            ".validate": "newData.hasChildren(['action', 'created_at'])",
+            ".write": "auth != null && auth.uid === 'VH3AIXTF47NIdjjdqNdRzMgGLQK2' && !newData.exists()",
+            ".validate": "newData.hasChildren(['action', 'created_at']) && ((newData.child('action').val() === 'set_jet' || newData.child('action').val() === 'set_swing') ? newData.hasChildren(['enabled']) : true)",
             "action": {
-              ".validate": "newData.isString() && (newData.val() === 'turn_on' || newData.val() === 'turn_off' || newData.val() === 'set_temperature')"
+              ".validate": "newData.isString() && (newData.val() === 'turn_on' || newData.val() === 'turn_off' || newData.val() === 'set_temperature' || newData.val() === 'set_jet' || newData.val() === 'set_swing')"
             },
             "setpoint": {
               ".validate": "newData.isNumber() && newData.val() >= 16 && newData.val() <= 30"
+            },
+            "enabled": {
+              ".validate": "newData.isBoolean() && (newData.parent().child('action').val() === 'set_jet' || newData.parent().child('action').val() === 'set_swing')"
             },
             "created_at": {
               ".validate": "newData.isNumber()"
@@ -74,7 +78,7 @@
           ".read": "auth != null",
           ".write": "auth != null && auth.uid === 'VH3AIXTF47NIdjjdqNdRzMgGLQK2'",
           "$commandId": {
-            ".validate": "newData.hasChildren(['status'])",
+            ".validate": "newData.hasChildren(['status']) || newData.hasChildren(['error_message'])",
             "status": {
               ".validate": "newData.isString() && newData.val() === 'transmitted'"
             },
@@ -93,7 +97,7 @@
     },
     "thresholds": {
       ".read": "auth != null",
-      ".write": "auth != null",
+      ".write": "auth != null && auth.uid !== 'VH3AIXTF47NIdjjdqNdRzMgGLQK2'",
       ".validate": "newData.hasChildren(['temperature', 'humidity'])",
       "temperature": {
         ".validate": "newData.hasChildren(['min', 'max'])",
@@ -126,6 +130,37 @@
     "alert_state": {
       ".read": "auth != null",
       ".write": false
+    },
+    "alert_history": {
+      ".read": "auth != null",
+      ".write": false,
+      ".indexOn": "timestamp",
+      "$alertId": {
+        ".validate": "newData.hasChildren(['status', 'active_parameters', 'timestamp', 'temperature', 'humidity'])",
+        "status": {
+          ".validate": "newData.isString() && newData.val() === 'abnormal'"
+        },
+        "active_parameters": {
+          "$index": {
+            ".validate": "newData.isString() && (newData.val() === 'temperature' || newData.val() === 'humidity')"
+          }
+        },
+        "temperature": {
+          ".validate": "newData.isNumber() && newData.val() >= -10 && newData.val() <= 60"
+        },
+        "humidity": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100"
+        },
+        "timestamp": {
+          ".validate": "newData.isNumber()"
+        },
+        "reading_timestamp": {
+          ".validate": "newData.isNumber()"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
     },
     "fcm_tokens": {
       "$uid": {

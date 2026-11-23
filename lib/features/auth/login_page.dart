@@ -76,6 +76,7 @@ class _LoginPageState extends State<LoginPage> {
                   crossAxisAlignment: .stretch,
                   children: [
                     Icon(
+                      key: const Key('login-logo'),
                       Icons.warehouse_outlined,
                       size: 56,
                       color: colorScheme.primary,

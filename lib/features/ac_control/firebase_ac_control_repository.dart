@@ -14,6 +14,7 @@ class FirebaseAcControlRepository implements AcControlRepository {
   Future<String> sendCommand({
     required AcAction action,
     double? setpoint,
+    bool? enabled,
   }) async {
     final reference = _database.ref('devices/ac_control/commands').push();
     final data = <String, Object?>{
@@ -22,6 +23,9 @@ class FirebaseAcControlRepository implements AcControlRepository {
     };
     if (setpoint != null) {
       data['setpoint'] = setpoint;
+    }
+    if (enabled != null) {
+      data['enabled'] = enabled;
     }
 
     await reference.set(data);
